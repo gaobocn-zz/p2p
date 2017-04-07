@@ -5,6 +5,12 @@
 #include <QTextEdit>
 #include <QLineEdit>
 #include <QUdpSocket>
+#include <QString>
+#include <QDataStream>
+#include <QHostAddress>
+#include <QVariant>
+
+#include "netsocket.hh"
 
 class ChatDialog : public QDialog
 {
@@ -15,24 +21,12 @@ public:
 
 public slots:
     void gotReturnPressed();
+    void recvData();
 
 private:
     QTextEdit *textview;
     QLineEdit *textline;
-};
-
-class NetSocket : public QUdpSocket
-{
-    Q_OBJECT
-
-public:
-    NetSocket();
-
-    // Bind this socket to a P2Papp-specific default port.
-    bool bind();
-
-private:
-    int myPortMin, myPortMax;
+    NetSocket *mySocket;
 };
 
 #endif // P2PAPP_MAIN_HH

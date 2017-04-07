@@ -9,6 +9,13 @@
 
 ChatDialog::ChatDialog()
 {
+    // Create a UDP network socket
+    mySocket = new NetSocket();
+    if (!mySocket->bind()) {
+        exit(-1);
+    }
+    connect(mySocket, SIGNAL(readyRead()), this, SLOT(recvData()));
+
     setWindowTitle("P2Papp");
 
     // Read-only text box where we display messages from everyone.
@@ -41,8 +48,22 @@ ChatDialog::ChatDialog()
 
 void ChatDialog::gotReturnPressed()
 {
-    // Initially, just echo the string locally.
-    // Insert some networking code here...
+    // Serialize
+    QVariantMap msgMap;
+    msgMap.insert(tr("ChatText"), textline->text());
+    QByteArray msgByteArray;
+    QDataStream msgStream(&msgByteArray, QIODevice::WriteOnly);
+    msgStream << msgMap;
+
+    // Send to network
+    for (int portI = mySocket->getPortMin(); portI <= mySocket->getPortMax(); ++portI) {
+        qint64 tsize = mySocket->writeDatagram(msgByteArray, QHostAddress::LocalHost, portI);
+        if (tsize == -1) {
+            exit(1);
+        }
+        qDebug() << "Sent to port: " << (quint16)(portI) << ", msg length:" << tsize;
+    }
+
     qDebug() << "FIX: send message to other peers: " << textline->text();
     textview->append(textline->text());
 
@@ -50,32 +71,28 @@ void ChatDialog::gotReturnPressed()
     textline->clear();
 }
 
-NetSocket::NetSocket()
-{
-    // Pick a range of four UDP ports to try to allocate by default,
-    // computed based on my Unix user ID.
-    // This makes it trivial for up to four P2Papp instances per user
-    // to find each other on the same host,
-    // barring UDP port conflicts with other applications
-    // (which are quite possible).
-    // We use the range from 32768 to 49151 for this purpose.
-    myPortMin = 32768 + (getuid() % 4096)*4;
-    myPortMax = myPortMin + 3;
-}
-
-bool NetSocket::bind()
-{
-    // Try to bind to each of the range myPortMin..myPortMax in turn.
-    for (int p = myPortMin; p <= myPortMax; p++) {
-        if (QUdpSocket::bind(p)) {
-            qDebug() << "bound to UDP port " << p;
-            return true;
+void ChatDialog::recvData() {
+    while (mySocket->hasPendingDatagrams()) {
+        // Recv from network
+        QByteArray msgByteArray;
+        msgByteArray.resize(mySocket->pendingDatagramSize());
+        QHostAddress senderAddr;
+        quint16 senderPort;
+        qint64 tsize = mySocket->readDatagram(msgByteArray.data(), mySocket->pendingDatagramSize(), &senderAddr, &senderPort);
+        if (tsize == -1) {
+            exit(1);
         }
-    }
 
-    qDebug() << "Oops, no ports in my default range " << myPortMin
-        << "-" << myPortMax << " available";
-    return false;
+        // De-serialize
+        QVariantMap msgMap; 
+        QDataStream msgStream(&msgByteArray, QIODevice::ReadOnly);
+        msgStream >> msgMap;
+        qDebug() << "recv the map: " << msgMap;
+
+        // Display
+        QString stringRecv(msgMap.value("ChatText").toString());
+        textview->append(stringRecv);
+    }
 }
 
 int main(int argc, char **argv)
@@ -86,11 +103,6 @@ int main(int argc, char **argv)
     // Create an initial chat dialog window
     ChatDialog dialog;
     dialog.show();
-
-    // Create a UDP network socket
-    NetSocket sock;
-    if (!sock.bind())
-        exit(1);
 
     // Enter the Qt main loop; everything else is event driven
     return app.exec();

@@ -10,4 +10,7 @@ QT += network
 
 # Input
 HEADERS += main.hh
+HEADERS += netsocket.hh
+
 SOURCES += main.cc
+SOURCES += netsocket.cc
