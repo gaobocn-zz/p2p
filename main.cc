@@ -30,6 +30,7 @@ ChatDialog::ChatDialog()
     QVBoxLayout *layout = new QVBoxLayout();
     layout->addWidget(textview);
     layout->addWidget(textline);
+    textline->setFocus();
     setLayout(layout);
 
     // Register a callback on the textline's returnPressed signal
