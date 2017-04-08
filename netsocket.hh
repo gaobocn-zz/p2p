@@ -16,6 +16,7 @@ public:
     int getPortMin() { return myPortMin; }
     int getPortMax() { return myPortMax; }
     int getPortNum() { return myPortNum; }
+    int pickNeighbor();
 
 private:
     int myPortMin, myPortMax, myPortNum;

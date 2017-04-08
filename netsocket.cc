@@ -32,3 +32,9 @@ bool NetSocket::bind()
         << "-" << myPortMax << " available";
     return false;
 }
+
+int NetSocket::pickNeighbor() {
+    if (myPortNum == myPortMax) return myPortNum - 1;
+    if (myPortNum == myPortMin) return myPortNum + 1;
+    return (qrand() % 2 ? myPortNum - 1 : myPortNum + 1);
+}
