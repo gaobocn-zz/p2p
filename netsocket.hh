@@ -13,13 +13,13 @@ public:
     // Bind this socket to a P2Papp-specific default port.
     bool bind();
 
-    int getPortMin() { return myPortMin; }
-    int getPortMax() { return myPortMax; }
-    int getPortNum() { return myPortNum; }
-    int pickNeighbor();
+    quint16 getPortMin() { return myPortMin; }
+    quint16 getPortMax() { return myPortMax; }
+    quint16 getPortNum() { return myPortNum; }
+    quint16 pickNeighbor();
 
 private:
-    int myPortMin, myPortMax, myPortNum;
+    quint16 myPortMin, myPortMax, myPortNum;
 };
 
 #endif // P2PAPP_NETSOCKET_HH

@@ -8,6 +8,12 @@
 
 #include "main.hh"
 
+const QString ChatDialog::TEXT_KEY = QString("ChatText");
+const QString ChatDialog::ID_KEY = QString("Origin");
+const QString ChatDialog::SEQNO_KEY = QString("SeqNo");
+
+const QString ChatDialog::WANT_KEY = QString("Want");
+
 ChatDialog::ChatDialog()
 {
     // Create a UDP network socket
@@ -21,8 +27,7 @@ ChatDialog::ChatDialog()
     this->myID = QHostInfo::localHostName() + "," + QString::number(mySocket->getPortNum()) + "," + QString::number(qrand());
     this->mySeqNo = 1;
 
-    this->msgTable.insert(myID, QVector<QString>());
-    this->msgNoTable.insert(myID, (quint32)1);
+    adID(myID);
 
     // UI
     setWindowTitle("P2Papp");
@@ -45,30 +50,34 @@ ChatDialog::ChatDialog()
         this, SLOT(gotReturnPressed()));
 }
 
+void ChatDialog::adID(const QString &id) {
+    this->msgTable.insert(id, QVector<QString>());
+    this->msgNoTable.insert(id, (quint32)1);
+}
+
+void ChatDialog::addMsg(const QString &id, const QString &msg) {
+    msgTable[id].push_back(msg);
+    msgNoTable.insert(id, msgNoTable[id].toUInt() + 1);
+    // Display
+    textview->append(id + ": " + msg);
+}
+
 void ChatDialog::gotReturnPressed()
 {
     // Serialize
     QVariantMap sendMsgMap;
-    sendMsgMap.insert(tr("ChatText"), textline->text());
+    sendMsgMap.insert(TEXT_KEY, textline->text());
     QByteArray msgByteArray;
     QDataStream msgStream(&msgByteArray, QIODevice::WriteOnly);
     msgStream << sendMsgMap;
 
-    msgTable[myID].push_back(textline->text());
-    msgNoTable.insert(myID, msgNoTable.value(myID).toInt() + 1);
+    addMsg(myID, textline->text());
 
     makeRM(myID, msgTable[myID].size());
 
     // Send to network
-    for (int portI = mySocket->getPortMin(); portI <= mySocket->getPortMax(); ++portI) {
-        if (portI == mySocket->getPortNum()) continue;
-        this->rmDestPort = portI;
-        sendRM();
-        this->smDestPort = portI;
-        sendSM();
-    }
-
-    textview->append(textline->text());
+    quint16 portNum = mySocket->pickNeighbor();
+    sendRM(portNum);
 
     // Clear the textline to get ready for the next input message.
     textline->clear();
@@ -80,9 +89,9 @@ void ChatDialog::makeRM(QString &id, quint32 seqNo) {
         exit(1);
     }
     rmMsg.clear();
-    rmMsg.insert(tr("ChatText"), msgTable[id][seqNo-1]);
-    rmMsg.insert(tr("Origin"), id);
-    rmMsg.insert(tr("SeqNo"), seqNo);
+    rmMsg.insert(TEXT_KEY, msgTable[id][seqNo-1]);
+    rmMsg.insert(ID_KEY, id);
+    rmMsg.insert(SEQNO_KEY, seqNo);
 }
 
 void ChatDialog::sendMsg(const QVariantMap &sendMsgMap, const quint16 &port) {
@@ -95,17 +104,42 @@ void ChatDialog::sendMsg(const QVariantMap &sendMsgMap, const quint16 &port) {
     if (tsize == -1) {
         exit(1);
     }
-    qDebug() << "Sent to port: " << (quint16)(port) << ", msg length:" << tsize;
+    // qDebug() << "Sent to port: " << (quint16)(port) << ", msg length:" << tsize;
 }
 
-void ChatDialog::sendSM() {
+void ChatDialog::sendRM(quint16 port) {
+    if (port > 0) {
+        this->rmDestPort = port;
+    }
+    qDebug() << "Send rumor msg to port:" << rmDestPort;
+    sendMsg(rmMsg, rmDestPort);
+}
+
+void ChatDialog::sendSM(quint16 port) {
+    if (port > 0) {
+        this->smDestPort = port;
+    }
     QVariantMap sendMsgMap;
-    sendMsgMap.insert(tr("Want"), msgNoTable);
+    sendMsgMap.insert(WANT_KEY, msgNoTable);
+    qDebug() << "Send status msg to port:" << smDestPort;
     sendMsg(sendMsgMap, smDestPort);
 }
 
+void ChatDialog::parseRM(const QVariantMap &recvMsgMap) {
+    QString textRecv = recvMsgMap[TEXT_KEY].toString();
+    QString idRecv = recvMsgMap[ID_KEY].toString();
+    quint32 seqNoRecv = recvMsgMap[SEQNO_KEY].toUInt();
+    if (msgNoTable.find(idRecv) == msgNoTable.end()) {
+        adID(idRecv);
+    }
+    // will update seq vector if is expected msg
+    if (seqNoRecv == msgNoTable[idRecv].toUInt()) {
+        addMsg(idRecv, textRecv);
+        makeRM(idRecv, msgTable[idRecv].size()); // prepare to forward this msg to others
+    }
+}
+
 void ChatDialog::recvData() {
-    // Recv from network
     QByteArray msgByteArray;
     msgByteArray.resize(mySocket->pendingDatagramSize());
     QHostAddress senderAddr;
@@ -120,14 +154,55 @@ void ChatDialog::recvData() {
     QDataStream msgStream(&msgByteArray, QIODevice::ReadOnly);
     msgStream >> recvMsgMap;
 
-    if (recvMsgMap.contains("Want")) {
-        qDebug() << recvMsgMap;
-        return;
+    if (recvMsgMap.contains(WANT_KEY)) {
+        // recved status msg
+        QVariantMap recvMsgNoTable = recvMsgMap[WANT_KEY].toMap();
+        qDebug() << "recved status msg" << recvMsgNoTable;
+        QVariantMap::iterator it;
+        for (it = recvMsgNoTable.begin(); it != recvMsgNoTable.end(); ++it) {
+            QString tID = it.key();
+            quint32 tSeqNo = it.value().toUInt();
+            if (msgNoTable.find(tID) == msgNoTable.end()) {
+                adID(tID);
+            }
+            if (tSeqNo > msgNoTable[tID].toUInt()) {
+                // I need new msg
+                sendSM(senderPort);
+                return;
+            } else if (tSeqNo < msgNoTable[tID].toUInt()) {
+                // you need new msg
+                makeRM(tID, tSeqNo);
+                sendRM(senderPort);
+                return;
+            }
+        }
+        // all ids in recvMsgNoTable have the same seqNo in msgNoTable
+        for (it = msgNoTable.begin(); it != msgNoTable.end(); ++it) {
+            QString tID = it.key();
+            if (recvMsgNoTable.find(tID) == recvMsgNoTable.end()) {
+                // I have something you don't have
+                makeRM(tID, 1);
+                sendRM(senderPort);
+                return;
+            }
+        }
+        // msgNoTable and recvMsgNoTable are identical
+        // nothing to be sent
+        if (rmMsg.empty()) return;
+        // flip coin
+        quint16 portNum = mySocket->pickNeighbor();
+        if (qrand() % 2) {
+            sendRM(portNum);
+        }
+    } else if (recvMsgMap.contains(TEXT_KEY)) {
+        // recved rumor msg
+        qDebug() << "recved rumor msg";
+        parseRM(recvMsgMap);
+        sendSM(senderPort);
+    } else {
+        qDebug() << "recvData: Map format wrong";
+        exit(1);
     }
-
-    // Display
-    QString stringRecv(recvMsgMap.value("ChatText").toString());
-    textview->append(stringRecv);
 }
 
 int main(int argc, char **argv)

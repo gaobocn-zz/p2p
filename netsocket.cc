@@ -20,7 +20,7 @@ NetSocket::NetSocket()
 bool NetSocket::bind()
 {
     // Try to bind to each of the range myPortMin..myPortMax in turn.
-    for (int p = myPortMin; p <= myPortMax; p++) {
+    for (quint16 p = myPortMin; p <= myPortMax; p++) {
         if (QUdpSocket::bind(p)) {
             this->myPortNum = p;
             qDebug() << "bound to UDP port " << p;
@@ -33,7 +33,7 @@ bool NetSocket::bind()
     return false;
 }
 
-int NetSocket::pickNeighbor() {
+quint16 NetSocket::pickNeighbor() {
     if (myPortNum == myPortMax) return myPortNum - 1;
     if (myPortNum == myPortMin) return myPortNum + 1;
     return (qrand() % 2 ? myPortNum - 1 : myPortNum + 1);

@@ -19,10 +19,17 @@ class ChatDialog : public QDialog
 public:
     ChatDialog();
     void sendMsg(const QVariantMap &sendMsgMap, const quint16 &port);
-    void sendRM() { sendMsg(rmMsg, rmDestPort); } // send rumor msg
-    void sendSM(); // send status msg
+    // send rumor msg, make it this way so it doesn't need parameter, can be used as SLOT
+    // TODO: Add timeout
+    void sendRM(quint16 port=0);
+    void sendSM(quint16 port=0); // send status msg
     void makeRM(QString &id, quint32 seqNo); // make rumor msg
-    // void makeSM(); // make status msg
+    // add a new id to msgTable
+    void adID(const QString &id);
+    // add a new msg to msgTable, update seq vector, display it.
+    void addMsg(const QString &id, const QString &msg);
+    // parse rumor msg
+    void parseRM(const QVariantMap &recvMsgMap);
 
 public slots:
     void gotReturnPressed();
@@ -49,6 +56,12 @@ private:
     // Used by sendSM
     quint16 smDestPort;
     QVariantMap smMsg;
+
+    static const QString TEXT_KEY;
+    static const QString ID_KEY;
+    static const QString SEQNO_KEY;
+
+    static const QString WANT_KEY;
 };
 
 #endif // P2PAPP_MAIN_HH
