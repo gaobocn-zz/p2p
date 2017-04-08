@@ -11,8 +11,10 @@
 const QString ChatDialog::TEXT_KEY = QString("ChatText");
 const QString ChatDialog::ID_KEY = QString("Origin");
 const QString ChatDialog::SEQNO_KEY = QString("SeqNo");
-
 const QString ChatDialog::WANT_KEY = QString("Want");
+
+const int ChatDialog::RM_TIMEOUT = 1000;
+const int ChatDialog::ANTI_ENTROPY_INTERVAL = 10000;
 
 ChatDialog::ChatDialog()
 {
@@ -26,10 +28,16 @@ ChatDialog::ChatDialog()
     qsrand(time(NULL));
     this->myID = QHostInfo::localHostName() + "," + QString::number(mySocket->getPortNum()) + "," + QString::number(qrand());
     this->mySeqNo = 1;
-
     adID(myID);
 
-    // UI
+    // init timer
+    resendTimer = new QTimer(this);
+    connect(resendTimer, SIGNAL(timeout()), this, SLOT(sendRM()));
+    antiEntropyTimer = new QTimer(this);
+    connect(antiEntropyTimer, SIGNAL(timeout()), this, SLOT(sendSM()));
+    antiEntropyTimer->start(ANTI_ENTROPY_INTERVAL);
+
+    // init UI
     setWindowTitle("P2Papp");
     setFixedSize(400, 400); // for testing
     textview = new QTextEdit(this);
@@ -110,14 +118,21 @@ void ChatDialog::sendMsg(const QVariantMap &sendMsgMap, const quint16 &port) {
 void ChatDialog::sendRM(quint16 port) {
     if (port > 0) {
         this->rmDestPort = port;
+    } else {
+        // no port provided means its resend
+        this->rmDestPort = mySocket->pickNeighbor();
     }
     qDebug() << "Send rumor msg to port:" << rmDestPort;
     sendMsg(rmMsg, rmDestPort);
+    resendTimer->start(RM_TIMEOUT);
 }
 
 void ChatDialog::sendSM(quint16 port) {
     if (port > 0) {
         this->smDestPort = port;
+    } else {
+        // no port provided means its anti-entropy
+        this->smDestPort = mySocket->pickNeighbor();
     }
     QVariantMap sendMsgMap;
     sendMsgMap.insert(WANT_KEY, msgNoTable);
@@ -140,6 +155,8 @@ void ChatDialog::parseRM(const QVariantMap &recvMsgMap) {
 }
 
 void ChatDialog::recvData() {
+    resendTimer->stop();
+
     QByteArray msgByteArray;
     msgByteArray.resize(mySocket->pendingDatagramSize());
     QHostAddress senderAddr;

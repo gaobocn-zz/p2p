@@ -9,6 +9,7 @@
 #include <QDataStream>
 #include <QHostAddress>
 #include <QVariant>
+#include <QTimer>
 
 #include "netsocket.hh"
 
@@ -19,10 +20,6 @@ class ChatDialog : public QDialog
 public:
     ChatDialog();
     void sendMsg(const QVariantMap &sendMsgMap, const quint16 &port);
-    // send rumor msg, make it this way so it doesn't need parameter, can be used as SLOT
-    // TODO: Add timeout
-    void sendRM(quint16 port=0);
-    void sendSM(quint16 port=0); // send status msg
     void makeRM(QString &id, quint32 seqNo); // make rumor msg
     // add a new id to msgTable
     void adID(const QString &id);
@@ -34,6 +31,9 @@ public:
 public slots:
     void gotReturnPressed();
     void recvData();
+    // These two functions don't need parameter, can be used as SLOT
+    void sendRM(quint16 port=0); // send rumor msg
+    void sendSM(quint16 port=0); // send status msg
 
 private:
     QTextEdit *textview;
@@ -60,8 +60,13 @@ private:
     static const QString TEXT_KEY;
     static const QString ID_KEY;
     static const QString SEQNO_KEY;
-
     static const QString WANT_KEY;
+
+    static const int RM_TIMEOUT;
+    static const int ANTI_ENTROPY_INTERVAL;
+
+    QTimer *resendTimer;
+    QTimer *antiEntropyTimer;
 };
 
 #endif // P2PAPP_MAIN_HH
