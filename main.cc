@@ -59,11 +59,19 @@ ChatDialog::ChatDialog()
 }
 
 void ChatDialog::adID(const QString &id) {
+    if (msgTable.find(id) != msgTable.end()) {
+        qDebug() << "adID";
+        exit(1);
+    }
     this->msgTable.insert(id, QVector<QString>());
     this->msgNoTable.insert(id, (quint32)1);
 }
 
 void ChatDialog::addMsg(const QString &id, const QString &msg) {
+    if (msgTable.find(id) == msgTable.end()) {
+        qDebug() << "addMsg";
+        exit(1);
+    }
     msgTable[id].push_back(msg);
     msgNoTable.insert(id, msgNoTable[id].toUInt() + 1);
     // Display
@@ -196,7 +204,8 @@ void ChatDialog::recvData() {
         // all ids in recvMsgNoTable have the same seqNo in msgNoTable
         for (it = msgNoTable.begin(); it != msgNoTable.end(); ++it) {
             QString tID = it.key();
-            if (recvMsgNoTable.find(tID) == recvMsgNoTable.end()) {
+            quint32 tSeqNo = it.value().toUInt();
+            if (recvMsgNoTable.find(tID) == recvMsgNoTable.end() && tSeqNo > 1) {
                 // I have something you don't have
                 makeRM(tID, 1);
                 sendRM(senderPort);
