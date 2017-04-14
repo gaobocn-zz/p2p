@@ -35,7 +35,6 @@ public slots:
     void sendRM(quint16 port=0); // send rumor msg
     void sendSM(quint16 port=0); // send status msg
 
-public:
     QTextEdit *textview;
     QLineEdit *textline;
 

@@ -231,18 +231,4 @@ void ChatDialog::recvData() {
     }
 }
 
-/*
-int haha(int argc, char **argv)
-{
-    // Initialize Qt toolkit
-    QApplication app(argc,argv);
-
-    // Create an initial chat dialog window
-    ChatDialog dialog;
-    dialog.show();
-
-    // Enter the Qt main loop; everything else is event driven
-    return app.exec();
-}
-*/
 
